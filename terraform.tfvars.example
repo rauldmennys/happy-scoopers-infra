@@ -1,0 +1,7 @@
+# Copia a terraform.tfvars y rellena con TUS datos.
+subscription_id  = "TU-SUBSCRIPTION-ID"          # az account show --query id -o tsv
+student_name     = "tunombre"                    # minúsculas, va en tu URL pública
+repo_url         = "https://github.com/TU-USUARIO/happy-scoopers-pg.git"  # TU fork
+acme_email       = "tu-correo@ejemplo.com"
+pgadmin_password = "unaClaveTuya"
+# ssh_public_key_path = "~/.ssh/id_rsa.pub"      # descomenta si tu llave tiene otro nombre

@@ -1,0 +1,96 @@
+#cloud-config
+# ==============================================================
+# Aprovisionamiento de la VM del estudiante ${student}.
+# cloud-init corre UNA vez, en el primer arranque, como root.
+#
+# Filosofía: la INFRAESTRUCTURA se levanta sola (bases, web, HTTPS);
+# el PIPELINE lo corre el estudiante a mano — porque eso es la clase.
+#
+# Log en vivo dentro de la VM:  sudo tail -f /var/log/cloud-init-output.log
+# ==============================================================
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - docker.io
+  - docker-compose-v2
+  - git
+  - make
+  - python3-venv
+  - python3-full
+  - postgresql-client
+  - htop
+
+write_files:
+  # Variables que consume docker-compose.cloud.yml
+  - path: /opt/happy-scoopers/.env
+    permissions: "0640"
+    content: |
+      DOMAIN=${domain}
+      ACME_EMAIL=${acme_email}
+      PGADMIN_PASSWORD=${pgadmin_password}
+
+  # Mensaje de bienvenida al entrar por SSH
+  - path: /etc/motd
+    content: |
+
+      ============================================================
+        Laboratorio Happy Scoopers DW  -  estudiante: ${student}
+      ============================================================
+        Proyecto:  /opt/happy-scoopers
+        Web:       https://${domain}
+        pgAdmin:   https://${domain}/pgadmin
+        Metabase:  https://${domain}/metabase
+
+        Empezar:
+          cd /opt/happy-scoopers
+          source .venv/bin/activate
+          make el-full        # carga inicial
+          make dbt-build      # construir el warehouse
+
+        Estado de los servicios:  docker compose ps
+      ============================================================
+
+  # Script de aprovisionamiento (se ejecuta abajo, en runcmd)
+  - path: /opt/bootstrap.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -euxo pipefail
+
+      # 1. El usuario maneja Docker sin sudo
+      usermod -aG docker ${admin_username}
+
+      # 2. Traer el proyecto (el .env ya escrito por cloud-init se conserva)
+      cd /opt
+      if [ ! -d /opt/happy-scoopers/.git ]; then
+        git clone ${repo_url} /opt/happy-scoopers-repo
+        cp -rn /opt/happy-scoopers-repo/. /opt/happy-scoopers/
+        rm -rf /opt/happy-scoopers-repo
+      fi
+      chown -R ${admin_username}:${admin_username} /opt/happy-scoopers
+
+      # 3. Entorno Python del proyecto (Ubuntu 24.04 = Python 3.12 nativo)
+      cd /opt/happy-scoopers
+      sudo -u ${admin_username} python3 -m venv .venv
+      sudo -u ${admin_username} .venv/bin/pip install --upgrade pip
+      sudo -u ${admin_username} .venv/bin/pip install -r el/requirements.txt dbt-postgres
+      sudo -u ${admin_username} .venv/bin/pip install -r orchestration/requirements.txt || true
+
+      # 3b. Paquetes de dbt (dbt_utils)
+      sudo -u ${admin_username} bash -c 'cd /opt/happy-scoopers/transform && DBT_PROFILES_DIR=. ../.venv/bin/dbt deps' || true
+
+      # 4. Levantar la infraestructura: bases + pgAdmin + Metabase + Caddy
+      #    (Caddy pide el certificado TLS solo, contra Let's Encrypt)
+      docker compose -f docker-compose.yml -f docker-compose.cloud.yml up -d
+
+      # 5. Señal de que todo terminó
+      touch /opt/happy-scoopers/.bootstrap-completo
+      echo "BOOTSTRAP COMPLETO para ${student} en ${domain}"
+
+runcmd:
+  - systemctl enable --now docker
+  - /opt/bootstrap.sh
+
+final_message: "Laboratorio de ${student} listo tras $UPTIME segundos. https://${domain}"

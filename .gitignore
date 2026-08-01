@@ -1,0 +1,6 @@
+# Terraform: estado y variables (contienen tu subscription_id y claves)
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate*
+terraform.tfvars
+*.tfplan
