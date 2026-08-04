@@ -15,13 +15,13 @@ variable "student_name" {
 variable "location" {
   description = "Región de Azure más cercana"
   type        = string
-  default     = "eastus"
+  default     = "westus3"
 }
 
 variable "vm_size" {
   description = "Tamaño de la VM. B2s alcanza; B2ms va holgado."
   type        = string
-  default     = "Standard_B2s"
+  default     = "Standard_B2s_v2"
 }
 
 variable "repo_url" {
